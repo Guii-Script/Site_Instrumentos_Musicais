@@ -2,28 +2,24 @@
 // Arquivo: detalhes.php (Tela de Detalhes da Fase)
 require_once 'conexao.php';
 
-// Valida o ID da música recebido pela URL. É uma medida de segurança.
 $id_musica = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 if (!$id_musica) {
-    header("Location: index.php"); // Se o ID for inválido, volta ao menu
+    header("Location: index.php");
     exit;
 }
 
-// Busca os detalhes completos da música selecionada no banco.
+// O SELECT * já busca a nova coluna 'imagem_capa' automaticamente
 $stmt = $pdo->prepare("SELECT * FROM musicas WHERE id = ?");
 $stmt->execute([$id_musica]);
 $musica = $stmt->fetch();
 
-// Se não encontrou uma música com aquele ID, volta ao menu.
 if (!$musica) {
     header("Location: index.php");
     exit;
 }
 
-// Decodifica o mapa de notas (que está em JSON) para um array PHP.
 $mapa_notas = json_decode($musica['mapa_notas'], true);
 $total_notas = is_array($mapa_notas) ? count($mapa_notas) : 0;
-// Calcula a pontuação máxima. Assumindo que cada nota vale 10 pontos.
 $pontuacao_maxima = $total_notas * 10;
 
 ?>
@@ -38,6 +34,8 @@ $pontuacao_maxima = $total_notas * 10;
     <div class="container">
         <h1><?php echo htmlspecialchars($musica['titulo']); ?></h1>
         <h2 class="subtitulo-artista">por <?php echo htmlspecialchars($musica['artista']); ?></h2>
+
+        <img src="<?php echo htmlspecialchars($musica['imagem_capa']); ?>" alt="Capa de <?php echo htmlspecialchars($musica['titulo']); ?>" class="details-cover-image">
 
         <div class="details-card">
             <h3>Informações da Fase</h3>

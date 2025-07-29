@@ -2,17 +2,11 @@
 // Arquivo: index.php (Tela de Listagem de Músicas)
 require_once 'conexao.php';
 
-// Busca todas as músicas, incluindo a nova imagem_capa
+// Esta parte continua igual, pois as músicas vêm do banco de dados.
 $stmt_all = $pdo->query("SELECT id, titulo, artista, imagem_capa FROM musicas ORDER BY titulo ASC");
 $musicas = $stmt_all->fetchAll();
 
-// As imagens para o banner continuam sendo definidas aqui
-$banner_images = [
-    'images/banner1.png',
-    'images/banner2.jpg',
-    'images/banner3.jpg',
-];
-
+// O array de imagens do banner foi REMOVIDO daqui.
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -22,27 +16,29 @@ $banner_images = [
     <title>RockBand Hero - Escolha sua Música</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <h1>RockBand Hero</h1>
 
-        <?php if (!empty($banner_images)): ?>
         <div id="heroBanner" class="carousel slide carousel-fade mb-4" data-bs-ride="carousel">
             <div class="carousel-indicators">
-                <?php foreach ($banner_images as $key => $image_path): ?>
-                    <button type="button" data-bs-target="#heroBanner" data-bs-slide-to="<?php echo $key; ?>" class="<?php echo ($key == 0) ? 'active' : ''; ?>" aria-current="<?php echo ($key == 0) ? 'true' : 'false'; ?>"></button>
-                <?php endforeach; ?>
+                <button type="button" data-bs-target="#heroBanner" data-bs-slide-to="0" class="active" aria-current="true"></button>
+                <button type="button" data-bs-target="#heroBanner" data-bs-slide-to="1"></button>
+                <button type="button" data-bs-target="#heroBanner" data-bs-slide-to="2"></button>
             </div>
 
             <div class="carousel-inner">
-                <?php foreach ($banner_images as $key => $image_path): ?>
-                    <div class="carousel-item <?php echo ($key == 0) ? 'active' : ''; ?>">
-                        <img src="<?php echo htmlspecialchars($image_path); ?>" class="d-block w-100 carousel-image-custom" alt="Banner Promocional <?php echo $key + 1; ?>">
-                    </div>
-                <?php endforeach; ?>
+                <div class="carousel-item active">
+                    <img src="images/banner1.png" class="d-block w-100 carousel-image-custom" alt="Banner Promocional 1">
+                </div>
+                <div class="carousel-item">
+                    <img src="images/banner2.jpg" class="d-block w-100 carousel-image-custom" alt="Banner Promocional 2">
+                </div>
+                <div class="carousel-item">
+                    <img src="images/banner3.jpg" class="d-block w-100 carousel-image-custom" alt="Banner Promocional 3">
+                </div>
             </div>
 
             <button class="carousel-control-prev" type="button" data-bs-target="#heroBanner" data-bs-slide="prev">
@@ -54,7 +50,6 @@ $banner_images = [
                 <span class="visually-hidden">Next</span>
             </button>
         </div>
-        <?php endif; ?>
         <h2>Escolha uma música para começar</h2>
 
         <?php if (count($musicas) > 0): ?>
@@ -77,6 +72,5 @@ $banner_images = [
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    </body>
+</body>
 </html>

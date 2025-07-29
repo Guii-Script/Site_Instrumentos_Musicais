@@ -1,236 +1,247 @@
 <?php
-// --- Conexão com o Banco de Dados (integrada) ---
-$host = 'localhost';
-$db   = 'rockband_db';
-$user = 'root';
-$pass = '';
-$charset = 'utf8mb4';
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-try {
-     $pdo = new PDO($dsn, $user, $pass);
-} catch (\PDOException $e) {
-     die("Erro ao conectar ao banco de dados: " . $e->getMessage());
+// --- PARTE 1: PREPARAÇÃO DO LADO DO SERVIDOR (PHP) ---
+// O objetivo desta parte é pegar os dados da música no banco de dados
+// e prepará-los para serem usados na página do jogo.
+
+// 1. Inclui o nosso arquivo de conexão com o banco de dados.
+// Sem isso, não conseguiríamos conversar com o MySQL.
+require_once 'conexao.php';
+
+// 2. Pega o ID da música que foi enviado pela URL.
+// Por exemplo, em "jogo.php?id=3", o ID é 3.
+// Usamos filter_input para garantir que estamos recebendo um número inteiro, é mais seguro!
+$id_musica = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+
+// 3. Se o ID não for um número válido, não podemos continuar.
+// Então, redirecionamos o usuário de volta para a página inicial.
+if (!$id_musica) {
+    header("Location: index.php");
+    exit; // 'exit' para o script imediatamente.
 }
 
-// Pega a música selecionada
-$id_musica = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-if (!$id_musica) die("Música inválida!");
-
+// 4. Prepara e executa uma consulta SQL para buscar a música com o ID que recebemos.
+// Usar '?' (prepared statements) protege nosso banco contra ataques de SQL Injection.
 $stmt = $pdo->prepare("SELECT * FROM musicas WHERE id = ?");
 $stmt->execute([$id_musica]);
-$musica = $stmt->fetch(PDO::FETCH_ASSOC);
-if (!$musica) die("Música não encontrada!");
+
+// 5. Pega os dados da música e guarda na variável $musica.
+$musica = $stmt->fetch();
+
+// 6. Se a consulta não retornar nenhuma música (ou seja, não existe música com esse ID),
+// também redirecionamos para a página inicial.
+if (!$musica) {
+    header("Location: index.php");
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <title>Jogando: <?php echo htmlspecialchars($musica['titulo']); ?></title>
-    <style>
-        /* --- CSS ATUALIZADO COM EFEITOS --- */
-        body { font-family: sans-serif; background-color: #282c34; color: #fff; text-align: center; }
-        #game-board { width: 400px; height: 600px; border: 2px solid #61dafb; margin: auto; position: relative; overflow: hidden; background-color: #20232a; border-radius: 10px; }
-        .note { 
-            width: 98px; 
-            height: 30px; 
-            position: absolute; 
-            border-radius: 5px; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            font-size: 1.5em; 
-            font-weight: bold; 
-            color: #20232a;
-            /* Transição suave para os efeitos */
-            transition: all 0.2s ease-out;
-        }
-        .note-A { background-color: #69F0AE; left: 1px; }
-        .note-S { background-color: #FF5252; left: 101px; }
-        .note-D { background-color: #FFD740; left: 201px; }
-        .note-F { background-color: #40C4FF; left: 301px; }
-        #hit-zone { 
-            position: absolute; 
-            bottom: 50px; 
-            width: 100%; 
-            height: 40px; /* Área maior para referência visual */
-            background: linear-gradient(to top, rgba(97, 218, 251, 0.3), rgba(97, 218, 251, 0));
-            border-top: 2px solid #61dafb;
-        }
-        #game-stats { margin: 10px; font-size: 1.2em; }
-        
-        /* EFEITO DE ACERTO */
-        .hit-effect {
-            opacity: 0;
-            transform: scale(1.5);
-            background-color: white !important;
-        }
-        
-        /* EFEITO DE ERRO (quando a nota passa direto) */
-        .miss-effect {
-            opacity: 0;
-            transform: translateY(20px) scale(0.8);
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1><?php echo htmlspecialchars($musica['titulo']); ?></h1>
-    <div id="game-stats">
-        <span id="score">Pontos: 0</span> | <span id="combo">Combo: 0</span>
+
+    <div id="game-container">
+        <a href="detalhes.php?id=<?php echo htmlspecialchars($musica['id']); ?>" class="btn-back-game">&larr; Voltar</a>
+
+        <h1><?php echo htmlspecialchars($musica['titulo']); ?></h1>
+
+        <div id="game-stats">
+            <span id="score">Pontos: 0</span>
+            <span id="combo">Combo: 0</span>
+        </div>
+
+        <div id="game-board">
+            <div id="hit-zone"></div>
+        </div>
+
+        <p id="start-message">Pressione [ESPAÇO] para começar!</p>
+
+        <audio id="game-audio" src="<?php echo htmlspecialchars($musica['arquivo_audio']); ?>"></audio>
     </div>
-    <div id="game-board">
-        <div id="hit-zone"></div>
-    </div>
-    <p id="start-message">Pressione [ESPAÇO] para começar!</p>
-    <audio id="game-audio" src="<?php echo htmlspecialchars($musica['arquivo_audio']); ?>"></audio>
 
     <script>
-    // --- LÓGICA DO JOGO ATUALIZADA ---
+    // Agora começa a parte mais divertida: a lógica do jogo em si!
 
-    // 1. Pegar os elementos da página
+    // --- Seção A: Preparando as Ferramentas ---
+
+    // Pegamos os elementos HTML que vamos precisar manipular durante o jogo.
+    // É como pegar as peças de um quebra-cabeça antes de começar a montar.
     const audio = document.getElementById('game-audio');
     const gameBoard = document.getElementById('game-board');
     const scoreDisplay = document.getElementById('score');
     const comboDisplay = document.getElementById('combo');
     const startMessage = document.getElementById('start-message');
-    
-    // 2. Pegar os dados da música que o PHP enviou
-    const musicaId = <?php echo $musica['id']; ?>;
 
-    // 3. Variáveis para controlar o estado do jogo
-    let score = 0;
-    let combo = 0;
-    let noteIndex = 0;
-    let activeNotes = [];
-    let gameRunning = false;
+    // Pegamos os dados da música que o PHP nos enviou.
+    // O PHP "imprime" o valor diretamente no nosso código JavaScript.
+    const musicaId = <?php echo $musica['id']; ?>;
+    const noteMap = <?php echo $musica['mapa_notas']; ?>; // Este é o mapa de notas vindo do banco!
+
+    // Variáveis que vão controlar o estado do nosso jogo.
+    let score = 0;              // Guarda a pontuação atual.
+    let combo = 0;              // Guarda a sequência de acertos.
+    let noteIndex = 0;          // Controla qual a próxima nota a ser criada do `noteMap`.
+    let activeNotes = [];       // Uma lista para guardar as notas que estão visíveis na tela.
+    let gameRunning = false;    // Diz se o jogo está rolando ou não.
+    
+    // Um "mapa" para associar cada tecla (A, S, D, F) a um estilo CSS.
     const keyPositions = { 'A': 'note-A', 'S': 'note-S', 'D': 'note-D', 'F': 'note-F' };
 
-    // --- NOVO: GERADOR DE MAPA DE NOTAS ---
-    // Esta função cria um jogo longo e mais fácil dinamicamente.
-    function createDynamicNoteMap() {
-        const newMap = [];
-        const duration = 60000; // Duração de 60 segundos
-        const interval = 850;   // Uma nota a cada 850ms (mais fácil)
-        const keys = ['A', 'S', 'D', 'F'];
-        
-        for (let time = 2000; time < duration; time += interval) {
-            const randomKey = keys[Math.floor(Math.random() * keys.length)];
-            newMap.push({ time: time, key: randomKey });
-        }
-        return newMap;
-    }
-    const noteMap = createDynamicNoteMap();
 
-    // Inicia o jogo ao apertar Espaço
+    // --- Seção B: O Início e o Fim do Jogo ---
+
+    // Fica "escutando" o teclado. Quando o jogador aperta e solta uma tecla...
     document.body.onkeyup = function(e) {
+        // ...verificamos se foi a barra de espaço e se o jogo ainda não começou.
         if (e.code === "Space" && !gameRunning) {
-            gameRunning = true;
-            startMessage.style.display = 'none';
-            audio.play();
-            requestAnimationFrame(gameLoop);
-            audio.onended = endGame;
+            startGame(); // Se sim, chamamos a função para começar o jogo!
         }
     }
 
-    // O loop que roda a cada frame do jogo
+    // Função que realmente começa o jogo.
+    function startGame() {
+        gameRunning = true; // Avisa o resto do código que o jogo começou.
+        startMessage.style.display = 'none'; // Esconde a mensagem "Pressione Espaço".
+        audio.play(); // Toca a música.
+        
+        // Inicia o "game loop", a função que vai rodar repetidamente.
+        requestAnimationFrame(gameLoop);
+        
+        // Define o que acontece quando a música acabar.
+        audio.onended = endGame;
+    }
+
+    // Função que é chamada quando a música termina.
+    function endGame() {
+        gameRunning = false; // Avisa que o jogo acabou.
+        alert(`Fim de Jogo!\nSua pontuação final foi: ${score}`);
+        
+        // Leva o jogador de volta para a tela de detalhes da música.
+        window.location.href = `detalhes.php?id=${musicaId}`;
+    }
+
+
+    // --- Seção C: O Coração do Jogo (O Game Loop) ---
+
+    // Esta é a função mais importante! Ela é chamada dezenas de vezes por segundo.
+    // `requestAnimationFrame` é a forma moderna e eficiente de criar animações no navegador.
     function gameLoop() {
+        // Se o jogo não estiver rodando (ex: pausado ou finalizado), a gente para o loop.
         if (!gameRunning) return;
 
+        // Pega o tempo atual da música em milissegundos.
         const elapsedTime = audio.currentTime * 1000;
 
-        // Cria novas notas
+        // **Lógica para criar novas notas:**
+        // Verificamos se já está na hora de criar a próxima nota do nosso mapa (`noteMap`).
+        // O `+ 3000` faz com que a nota seja criada 3 segundos ANTES de chegar na zona de acerto.
         while (noteIndex < noteMap.length && noteMap[noteIndex].time <= elapsedTime + 3000) {
-            createNote(noteMap[noteIndex]);
-            noteIndex++;
+            createNoteElement(noteMap[noteIndex]);
+            noteIndex++; // Avança para a próxima nota do mapa.
         }
 
-        // Move as notas e checa as que foram perdidas
-        for (let i = activeNotes.length - 1; i >= 0; i--) {
-            const note = activeNotes[i];
+        // **Lógica para mover as notas que já estão na tela:**
+        // Passamos por cada nota na lista `activeNotes`.
+        activeNotes.forEach((note, index) => {
             const noteTime = note.dataset.time;
-            const fallDuration = 3000;
+            const fallDuration = 3000; // O tempo em milissegundos que a nota leva para cair.
+
+            // Calcula o progresso da queda da nota (de 0 a 1).
             const progress = (elapsedTime - (noteTime - fallDuration)) / fallDuration;
-            note.style.top = (progress * 600) + 'px';
+            
+            // Atualiza a posição 'top' da nota na tela.
+            // A posição é baseada no progresso da queda e na altura da pista.
+            note.style.top = (progress * (gameBoard.clientHeight - 30)) + 'px';
 
-            // NOVO: EFEITO DE ERRO se a nota passar da tela
-            if (parseFloat(note.style.top) > 600) {
-                note.classList.add('miss-effect');
-                setTimeout(() => note.remove(), 200); // Remove após o efeito
-
-                activeNotes.splice(i, 1);
-                combo = 0;
-                comboDisplay.textContent = 'Combo: ' + combo;
+            // Se a nota passou do fim da tela, o jogador errou.
+            if (parseFloat(note.style.top) > gameBoard.clientHeight) {
+                handleMiss(note, index);
             }
-        }
+        });
         
+        // Pede ao navegador para chamar a função `gameLoop` de novo no próximo "quadro".
+        // É isso que cria o movimento contínuo.
         requestAnimationFrame(gameLoop);
     }
 
-    function createNote(noteData) {
-        const noteEl = document.createElement('div');
-        noteEl.className = 'note ' + keyPositions[noteData.key];
+
+    // --- Seção D: Funções de Ação e Reação ---
+
+    // Função que cria o elemento HTML de uma nota e o coloca na tela.
+    function createNoteElement(noteData) {
+        const noteEl = document.createElement('div'); // Cria uma <div>
+        noteEl.className = 'note ' + keyPositions[noteData.key]; // Define a classe CSS dela
+        
+        // Guarda informações importantes na própria nota usando `dataset`.
         noteEl.dataset.time = noteData.time;
         noteEl.dataset.key = noteData.key;
-        noteEl.textContent = noteData.key;
-        gameBoard.appendChild(noteEl);
-        activeNotes.push(noteEl);
+        
+        noteEl.textContent = noteData.key; // Escreve a letra dentro da nota.
+        
+        gameBoard.appendChild(noteEl); // Adiciona a nota na pista.
+        activeNotes.push(noteEl);      // Adiciona a nota na nossa lista de notas ativas.
     }
 
-    // Função que escuta as teclas pressionadas
+    // Fica "escutando" as teclas que o jogador pressiona.
     document.addEventListener('keydown', (e) => {
-        if (!gameRunning) return;
-        const pressedKey = e.key.toUpperCase();
+        if (!gameRunning) return; // Se o jogo não começou, não faz nada.
 
-        // LÓGICA DE ACERTO ATUALIZADA
-        const hitZoneCenter = 550; // O "ponto perfeito" em pixels (baseado na altura de 600px do game-board)
-        const hitWindow = 50;      // A distância em pixels da nota para o centro para contar como acerto
+        const pressedKey = e.key.toUpperCase(); // Pega a tecla pressionada (ex: 'a' vira 'A').
+        
+        // Ignora qualquer tecla que não seja A, S, D ou F.
+        if (!['A', 'S', 'D', 'F'].includes(pressedKey)) return;
 
-        for (let i = 0; i < activeNotes.length; i++) {
+        const hitZoneCenterY = gameBoard.clientHeight - 50; // Ponto ideal do acerto.
+        const hitWindow = 50; // A "margem de erro" para cima e para baixo.
+        
+        let hit = false; // Variável para saber se o jogador acertou alguma nota.
+
+        // Procura a nota certa para acertar.
+        // Contamos de trás para frente porque podemos remover uma nota da lista.
+        // Se contássemos para frente, poderíamos pular a próxima nota sem querer ao remover uma!
+        for (let i = activeNotes.length - 1; i >= 0; i--) {
             const note = activeNotes[i];
-            const notePosition = parseFloat(note.style.top);
-            
-            // Se a tecla é a certa E a nota está na zona de acerto
-            if (note.dataset.key === pressedKey && Math.abs(notePosition - hitZoneCenter) < hitWindow) {
-                // ACERTOU!
-                score += 10;
-                combo++;
-                scoreDisplay.textContent = 'Pontos: ' + score;
-                comboDisplay.textContent = 'Combo: ' + combo;
+            const notePosition = parseFloat(note.style.top) + (note.clientHeight / 2);
 
-                // NOVO: Adiciona o efeito de acerto e remove a nota
-                note.classList.add('hit-effect');
-                setTimeout(() => note.remove(), 200);
-
-                activeNotes.splice(i, 1);
-                return; // Acertou, não precisa checar outras notas
+            // Verifica se a tecla pressionada é a mesma da nota E se a nota está na zona de acerto.
+            if (note.dataset.key === pressedKey && Math.abs(notePosition - hitZoneCenterY) < hitWindow) {
+                handleHit(note, i); // Se sim, chama a função de acerto.
+                hit = true;
+                break; // Acertou, então não precisa procurar mais.
             }
         }
-        
-        // NOVO: Penalidade por apertar a tecla errada (efeito visual vermelho na zona de acerto)
-        if (['A', 'S', 'D', 'F'].includes(pressedKey)) {
-             const hitZoneEl = document.getElementById('hit-zone');
-             hitZoneEl.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-             setTimeout(() => {
-                hitZoneEl.style.backgroundColor = 'transparent'; // Volta ao normal
-             }, 100);
-        }
     });
+    
+    // O que acontece quando o jogador ACERTA.
+    function handleHit(note, index) {
+        score += (10 + combo); // Aumenta a pontuação (com bônus de combo).
+        combo++;               // Aumenta o combo.
+        updateDisplays();      // Atualiza os textos de score e combo na tela.
 
-    function endGame() {
-        gameRunning = false;
-        alert(`Fim de Jogo! Sua pontuação final: ${score}`);
-        const playerName = prompt("Digite seu nome para o ranking:", "Player1");
-        if (playerName) {
-            fetch('salvar_pontuacao.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nome: playerName, pontos: score, musica_id: musicaId })
-            }).then(() => {
-                window.location.href = `ranking.php?id=${musicaId}`;
-            });
-        } else {
-             window.location.href = `index.php`;
-        }
+        note.classList.add('hit-effect');        // Adiciona um efeito visual de acerto.
+        setTimeout(() => note.remove(), 200);    // Remove a nota da tela após o efeito.
+        activeNotes.splice(index, 1);            // Remove a nota da nossa lista de notas ativas.
     }
+
+    // O que acontece quando o jogador ERRA.
+    function handleMiss(note, index) {
+        combo = 0;             // Zera o combo.
+        updateDisplays();      // Atualiza a tela.
+
+        note.classList.add('miss-effect');       // Adiciona um efeito visual de erro.
+        setTimeout(() => note.remove(), 200);    // Remove a nota da tela após o efeito.
+        activeNotes.splice(index, 1);            // Remove a nota da lista.
+    }
+    
+    // Uma pequena função para manter a tela sempre atualizada com o score e combo.
+    function updateDisplays() {
+        scoreDisplay.textContent = 'Pontos: ' + score;
+        comboDisplay.textContent = 'Combo: ' + combo;
+    }
+
     </script>
 </body>
 </html>

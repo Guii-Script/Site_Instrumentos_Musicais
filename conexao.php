@@ -1,6 +1,4 @@
 <?php
-// Arquivo: conexao.php
-// Centraliza a configuração e a inicialização da conexão com o banco de dados.
 
 $host = 'localhost';
 $db   = 'rockband_db';

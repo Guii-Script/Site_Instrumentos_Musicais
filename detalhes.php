@@ -9,7 +9,7 @@ if (!$id_musica) {
 }
 
 // O SELECT * já busca a nova coluna 'imagem_capa' automaticamente
-$stmt = $pdo->prepare("SELECT * FROM musicas WHERE id = ?");
+$stmt = $pdo->prepare("SELECT * FROM tb_musicas WHERE id = ?");
 $stmt->execute([$id_musica]);
 $musica = $stmt->fetch();
 

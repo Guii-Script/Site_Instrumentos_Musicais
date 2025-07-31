@@ -2,11 +2,10 @@
 // Arquivo: index.php (Tela de Listagem de Músicas)
 require_once 'conexao.php';
 
-// Esta parte continua igual, pois as músicas vêm do banco de dados.
-$stmt_all = $pdo->query("SELECT id, titulo, artista, imagem_capa FROM musicas ORDER BY titulo ASC");
+
+$stmt_all = $pdo->query("SELECT id, titulo, artista, imagem_capa FROM tb_musicas ORDER BY titulo ASC");
 $musicas = $stmt_all->fetchAll();
 
-// O array de imagens do banner foi REMOVIDO daqui.
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">

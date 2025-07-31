@@ -1,7 +1,7 @@
 <?php
 
 $host = 'localhost';
-$db   = 'rockband_db';
+$db   = 'db_rockband';
 $user = 'root'; // Usuário padrão do XAMPP/WAMP
 $pass = '';     // Senha padrão do XAMPP/WAMP
 $charset = 'utf8mb4';

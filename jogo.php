@@ -1,10 +1,5 @@
 <?php
-// --- PARTE 1: PREPARAÇÃO DO LADO DO SERVIDOR (PHP) ---
-// O objetivo desta parte é pegar os dados da música no banco de dados
-// e prepará-los para serem usados na página do jogo.
 
-// 1. Inclui o nosso arquivo de conexão com o banco de dados.
-// Sem isso, não conseguiríamos conversar com o MySQL.
 require_once 'conexao.php';
 
 // 2. Pega o ID da música que foi enviado pela URL.
@@ -21,7 +16,7 @@ if (!$id_musica) {
 
 // 4. Prepara e executa uma consulta SQL para buscar a música com o ID que recebemos.
 // Usar '?' (prepared statements) protege nosso banco contra ataques de SQL Injection.
-$stmt = $pdo->prepare("SELECT * FROM musicas WHERE id = ?");
+$stmt = $pdo->prepare("SELECT * FROM tb_musicas WHERE id = ?");
 $stmt->execute([$id_musica]);
 
 // 5. Pega os dados da música e guarda na variável $musica.
